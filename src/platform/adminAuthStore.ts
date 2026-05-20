@@ -1,13 +1,14 @@
 /**
  * Pinia store for the owner-session.
  *
- * The session token is stored in localStorage and sent as Authorization: Bearer.
+ * The session is a cookie set by the backend, so all we cache here is
+ * "who am I right now?" — checked on demand.
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { contentClient, clearSessionToken } from './contentClient'
 
-export interface AdminOwner { id: string; email: string; name?: string }
+export interface AdminOwner { id: string; email: string; name?: string; hasPassword?: boolean }
 
 export const useAdminAuthStore = defineStore('adminAuth', () => {
   const owner = ref<AdminOwner | null>(null)
