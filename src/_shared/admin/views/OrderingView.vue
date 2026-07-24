@@ -1,7 +1,18 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { contentClient, type MenuItemDTO, type MenuItemInput, type MealOrderDTO, type OrderingConfigDTO } from '../../platform/contentClient'
 import { useActiveSiteStore } from '../../platform/activeSiteStore'
+import MoneyInput from '../components/inputs/MoneyInput.vue'
+import NumberInput from '../components/inputs/NumberInput.vue'
+import ToggleInput from '../components/inputs/ToggleInput.vue'
+import SelectInput from '../components/inputs/SelectInput.vue'
+import SearchSelect from '../components/inputs/SearchSelect.vue'
+import TimezoneSelect from '../components/inputs/TimezoneSelect.vue'
+import ImageInput from '../components/inputs/ImageInput.vue'
+import TimePickerInput from '../components/inputs/TimePickerInput.vue'
+import ChipsInput from '../components/inputs/ChipsInput.vue'
+
+const CURRENCY_OPTIONS = ['USD', 'CAD', 'EUR', 'GBP', 'MXN'].map(c => ({ value: c, label: c }))
 
 const activeSites = useActiveSiteStore()
 const siteId = computed(() => activeSites.activeId)
@@ -16,15 +27,42 @@ const items = ref<MenuItemDTO[]>([])
 const orders = ref<MealOrderDTO[]>([])
 const addOnEnabled = ref(false)
 
-// Local editor model for hours: weekday -> "HH:MM-HH:MM,HH:MM-HH:MM" string.
-const hoursEditor = ref<Record<number, string>>({})
-const dayLabels: Array<{ idx: number; label: string }> = [
-  { idx: 0, label: 'Sun' }, { idx: 1, label: 'Mon' }, { idx: 2, label: 'Tue' }, { idx: 3, label: 'Wed' },
-  { idx: 4, label: 'Thu' }, { idx: 5, label: 'Fri' }, { idx: 6, label: 'Sat' },
+// Local editor model for hours: weekday -> list of {open, close} ranges,
+// each an "HH:MM" 24-hour string. Serialized back to "HH:MM-HH:MM" on save.
+interface HourRange { open: string; close: string }
+const hoursRanges = ref<Record<number, HourRange[]>>({})
+const dayLabels: Array<{ idx: number; label: string; full: string }> = [
+  { idx: 0, label: 'Sun', full: 'Sunday' }, { idx: 1, label: 'Mon', full: 'Monday' },
+  { idx: 2, label: 'Tue', full: 'Tuesday' }, { idx: 3, label: 'Wed', full: 'Wednesday' },
+  { idx: 4, label: 'Thu', full: 'Thursday' }, { idx: 5, label: 'Fri', full: 'Friday' },
+  { idx: 6, label: 'Sat', full: 'Saturday' },
 ]
+
+// Multiple notification recipients — new orders email everyone in this list.
+const notifyEmails = ref<string[]>([])
+
+function addRange(idx: number) {
+  (hoursRanges.value[idx] ??= []).push({ open: '11:00', close: '20:00' })
+}
+function removeRange(idx: number, ri: number) {
+  hoursRanges.value[idx]?.splice(ri, 1)
+}
+/** Copy one day's ranges to every other day — a common "same hours all week" shortcut. */
+function copyToAll(idx: number) {
+  const src = hoursRanges.value[idx] ?? []
+  for (const { idx: d } of dayLabels) {
+    hoursRanges.value[d] = src.map(r => ({ ...r }))
+  }
+}
 
 const newItem = ref<MenuItemInput>({
   sku: '', name: '', description: '', priceCents: 0, currency: 'USD', category: '', imageUrl: '', active: true, sortOrder: 0,
+})
+
+/** Categories already in use — the picker offers them and allows new ones. */
+const categoryOptions = computed(() => {
+  const seen = [...new Set(items.value.map(i => i.category).filter(Boolean))]
+  return seen.map(c => ({ value: c, label: c }))
 })
 
 async function load() {
@@ -43,11 +81,16 @@ async function load() {
     orders.value = ords
     addOnEnabled.value = !!sites.find(s => s.id === siteId.value)?.addOns?.includes('ordering')
     if (cfg.resolved.currency) newItem.value.currency = cfg.resolved.currency
-    hoursEditor.value = {}
+    hoursRanges.value = {}
     for (const { idx } of dayLabels) {
       const ranges = cfg.resolved.hours?.[idx] ?? []
-      hoursEditor.value[idx] = ranges.join(', ')
+      hoursRanges.value[idx] = ranges.map(r => {
+        const [open, close] = r.split('-')
+        return { open: (open ?? '').trim(), close: (close ?? '').trim() }
+      })
     }
+    notifyEmails.value = (cfg.resolved.notifyEmail || '')
+      .split(/[,;]/).map(s => s.trim()).filter(Boolean)
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
   } finally {
@@ -112,12 +155,12 @@ async function deleteItem(p: MenuItemDTO) {
 
 function parseHoursEditor(): Record<number, string[]> {
   const out: Record<number, string[]> = {}
+  const t = /^\d{1,2}:\d{2}$/
   for (const { idx } of dayLabels) {
-    const raw = (hoursEditor.value[idx] ?? '').trim()
-    if (!raw) continue
-    const ranges = raw.split(',').map(s => s.trim()).filter(Boolean)
-    const valid = ranges.filter(r => /^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/.test(r))
-    if (valid.length) out[idx] = valid
+    const ranges = (hoursRanges.value[idx] ?? [])
+      .filter(r => t.test(r.open) && t.test(r.close))
+      .map(r => `${r.open}-${r.close}`)
+    if (ranges.length) out[idx] = ranges
   }
   return out
 }
@@ -136,7 +179,7 @@ async function saveConfig() {
       maxOrdersPerSlot: Math.max(1, Math.round(resolved.value.maxOrdersPerSlot)),
       windowDays: Math.max(1, Math.round(resolved.value.windowDays)),
       pickupInstructions: resolved.value.pickupInstructions,
-      notifyEmail: resolved.value.notifyEmail || undefined,
+      notifyEmail: notifyEmails.value.join(', ') || undefined,
     }
     const next = await contentClient.saveOrderingConfig(siteId.value, payload)
     resolved.value = next.resolved
@@ -189,7 +232,7 @@ watch(siteId, load)
   <section class="adm-page">
     <header class="adm-page__head">
       <div>
-        <span class="adm-eyebrow">Premium add-on</span>
+        <span class="adm-eyebrow adm-eyebrow--premium">★ Premium add-on</span>
         <h1 class="adm-title">Ordering</h1>
         <p class="adm-subtitle">
           Accept pickup orders from your menu. Define your hours, kitchen capacity,
@@ -212,7 +255,7 @@ watch(siteId, load)
 
     <template v-else>
       <p v-if="error" class="adm-msg-err">{{ error }}</p>
-      <p v-if="loading" class="adm-muted">Loading…</p>
+      <p v-if="loading" class="adm-muted">Loadingâ€¦</p>
 
       <div v-if="!addOnEnabled" class="adm-card adm-card--soft addon-gate">
         <p>
@@ -229,15 +272,13 @@ watch(siteId, load)
           <li v-for="p in items" :key="p.id" class="rm-row">
             <input class="adm-input rm-row__sku" v-model="p.sku" placeholder="SKU" />
             <input class="adm-input rm-row__name" v-model="p.name" placeholder="Name" />
-            <input class="adm-input rm-row__cat" v-model="p.category" placeholder="Category" />
+            <div class="rm-row__cat"><SearchSelect v-model="p.category" :options="categoryOptions" creatable placeholder="Category" /></div>
             <input class="adm-input rm-row__desc" v-model="p.description" placeholder="Description" />
-            <input class="adm-input rm-row__price" type="number" min="0" step="1" v-model.number="p.priceCents" title="Price (cents)" />
-            <input class="adm-input rm-row__img" v-model="p.imageUrl" placeholder="image url" />
-            <label class="rm-row__active" :title="p.active ? 'Active' : 'Hidden'">
-              <input type="checkbox" v-model="p.active" /> live
-            </label>
+            <div class="rm-row__price"><MoneyInput v-model="p.priceCents" :currency="resolved?.currency || 'USD'" /></div>
+            <div class="rm-row__img"><ImageInput :model-value="p.imageUrl ?? ''" :site-id="siteId" aspect="1 / 1" @update:model-value="(v: string) => p.imageUrl = v" /></div>
+            <div class="rm-row__active"><ToggleInput v-model="p.active" label="Live" /></div>
             <button type="button" class="adm-btn adm-btn--primary adm-btn--sm" @click="saveItem(p)">Save</button>
-            <button type="button" class="adm-btn adm-btn--ghost adm-btn--sm" @click="deleteItem(p)">×</button>
+            <button type="button" class="adm-btn adm-btn--ghost adm-btn--sm" @click="deleteItem(p)">Ã—</button>
           </li>
         </ul>
         <p v-else class="adm-muted adm-mb">No menu items yet.</p>
@@ -245,73 +286,71 @@ watch(siteId, load)
         <div class="rm-row rm-row--new">
           <input class="adm-input rm-row__sku" v-model="newItem.sku" placeholder="SKU" />
           <input class="adm-input rm-row__name" v-model="newItem.name" placeholder="Name" />
-          <input class="adm-input rm-row__cat" v-model="newItem.category" placeholder="Category" />
+          <div class="rm-row__cat"><SearchSelect :model-value="newItem.category ?? ''" :options="categoryOptions" creatable placeholder="Category" @update:model-value="(v: string) => newItem.category = v" /></div>
           <input class="adm-input rm-row__desc" v-model="newItem.description" placeholder="Description" />
-          <input class="adm-input rm-row__price" type="number" min="0" step="1" v-model.number="newItem.priceCents" placeholder="cents" />
-          <input class="adm-input rm-row__img" v-model="newItem.imageUrl" placeholder="image url" />
-          <label class="rm-row__active">
-            <input type="checkbox" v-model="newItem.active" /> live
-          </label>
+          <div class="rm-row__price"><MoneyInput v-model="newItem.priceCents" :currency="resolved?.currency || 'USD'" /></div>
+          <div class="rm-row__img"><ImageInput :model-value="newItem.imageUrl ?? ''" :site-id="siteId" aspect="1 / 1" @update:model-value="(v: string) => newItem.imageUrl = v" /></div>
+          <div class="rm-row__active"><ToggleInput :model-value="newItem.active ?? true" label="Live" @update:model-value="(v: boolean) => newItem.active = v" /></div>
           <button type="button" class="adm-btn adm-btn--primary adm-btn--sm" @click="addItem">Add</button>
           <span />
         </div>
-        <p class="adm-muted" style="font-size: 0.75rem; margin-top: 0.5rem;">
-          Prices are in cents (e.g. <code>1200</code> = $12).
-        </p>
       </section>
 
       <section v-if="resolved" class="adm-card">
         <h2 class="adm-h2">Ordering settings</h2>
         <div class="meta-grid">
-          <label class="adm-field">
-            <span>Timezone</span>
-            <input class="adm-input" v-model="resolved.timezone" />
-          </label>
-          <label class="adm-field">
-            <span>Currency</span>
-            <input class="adm-input" v-model="resolved.currency" maxlength="3" />
-          </label>
-          <label class="adm-field">
-            <span>Slot length (minutes)</span>
-            <input class="adm-input" type="number" min="5" step="5" v-model.number="resolved.slotMinutes" />
-          </label>
-          <label class="adm-field">
-            <span>Prep lead time (minutes)</span>
-            <input class="adm-input" type="number" min="0" step="5" v-model.number="resolved.prepMinutes" />
-          </label>
-          <label class="adm-field">
-            <span>Max orders per slot</span>
-            <input class="adm-input" type="number" min="1" v-model.number="resolved.maxOrdersPerSlot" />
-          </label>
-          <label class="adm-field">
-            <span>Window (days forward)</span>
-            <input class="adm-input" type="number" min="1" max="60" v-model.number="resolved.windowDays" />
-          </label>
+          <TimezoneSelect v-model="resolved.timezone" label="Timezone" />
+          <SelectInput v-model="resolved.currency" label="Currency" :options="CURRENCY_OPTIONS" />
+          <NumberInput v-model="resolved.slotMinutes" label="Slot length" :min="5" :step="5" unit="min" />
+          <NumberInput v-model="resolved.prepMinutes" label="Prep lead time" :min="0" :step="5" unit="min" />
+          <NumberInput v-model="resolved.maxOrdersPerSlot" label="Max orders per slot" :min="1" unit="orders" />
+          <NumberInput v-model="resolved.windowDays" label="Window forward" :min="1" :max="60" unit="days" />
           <label class="adm-field adm-field--full">
             <span>Pickup instructions</span>
             <textarea class="adm-input" rows="2" v-model="resolved.pickupInstructions" />
           </label>
-          <label class="adm-field adm-field--full">
-            <span>Notification email (optional)</span>
-            <input class="adm-input" type="email" v-model="resolved.notifyEmail" />
-          </label>
+          <div class="adm-field adm-field--full">
+            <span>Notification emails (optional)</span>
+            <ChipsInput
+              v-model="notifyEmails"
+              placeholder="Add an email and press Enter…"
+              hint="New orders are emailed to everyone here. Falls back to your account email if empty."
+            />
+          </div>
         </div>
 
         <h3 class="adm-h2" style="margin-top: 1rem; font-size: 0.95rem;">Pickup hours</h3>
-        <p class="adm-muted" style="font-size: 0.8rem; margin: 0 0 0.5rem;">
-          Format: <code>11:00-14:00, 17:00-21:00</code>. Leave blank for a closed day.
+        <p class="adm-muted" style="font-size: 0.8rem; margin: 0 0 0.75rem;">
+          Tap a time to pick it from the clock, or just type it. Add a second range for a lunch/dinner split. No ranges = closed that day.
         </p>
-        <div class="hours-grid">
-          <label v-for="d in dayLabels" :key="d.idx" class="adm-field">
-            <span>{{ d.label }}</span>
-            <input class="adm-input" v-model="hoursEditor[d.idx]" placeholder="11:00-20:00" />
-          </label>
+        <div class="hours-editor">
+          <div v-for="d in dayLabels" :key="d.idx" class="hours-day">
+            <div class="hours-day__label" :title="d.full">{{ d.label }}</div>
+            <div class="hours-day__ranges">
+              <div v-for="(r, ri) in (hoursRanges[d.idx] ?? [])" :key="ri" class="hours-range">
+                <TimePickerInput v-model="r.open" :aria-label="`${d.full} opening time`" />
+                <span class="hours-range__dash">–</span>
+                <TimePickerInput v-model="r.close" :aria-label="`${d.full} closing time`" />
+                <button type="button" class="hours-range__rm" :aria-label="'Remove hours'" @click="removeRange(d.idx, ri)">×</button>
+              </div>
+              <span v-if="!(hoursRanges[d.idx] ?? []).length" class="hours-day__closed">Closed</span>
+              <div class="hours-day__actions">
+                <button type="button" class="hours-day__add" @click="addRange(d.idx)">+ Add hours</button>
+                <button
+                  v-if="(hoursRanges[d.idx] ?? []).length"
+                  type="button" class="hours-day__copy"
+                  title="Apply these hours to every day"
+                  @click="copyToAll(d.idx)"
+                >Copy to all days</button>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
       <div class="save-bar">
         <button type="button" class="adm-btn adm-btn--primary" :disabled="saving" @click="saveConfig">
-          {{ saving ? 'Saving…' : 'Save settings' }}
+          {{ saving ? 'Savingâ€¦' : 'Save settings' }}
         </button>
         <span v-if="savedAt" class="adm-muted">Saved {{ new Date(savedAt).toLocaleTimeString() }}</span>
       </div>
@@ -328,11 +367,11 @@ watch(siteId, load)
               <td>{{ pickupLocal(o.pickupAt) }}</td>
               <td>
                 {{ o.name }}<br />
-                <small><a :href="`mailto:${o.email}`">{{ o.email }}</a><template v-if="o.phone"> · {{ o.phone }}</template></small>
+                <small><a :href="`mailto:${o.email}`">{{ o.email }}</a><template v-if="o.phone"> Â· {{ o.phone }}</template></small>
               </td>
               <td>
                 <div v-for="it in o.items" :key="it.menuItemId">
-                  {{ it.name }} × {{ it.quantity }}<template v-if="it.notes"> <em>({{ it.notes }})</em></template>
+                  {{ it.name }} Ã— {{ it.quantity }}<template v-if="it.notes"> <em>({{ it.notes }})</em></template>
                 </div>
               </td>
               <td>{{ money(o.totalCents, o.currency) }}</td>
@@ -367,8 +406,46 @@ watch(siteId, load)
 .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
 .adm-field { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--adm-text-subtle); }
 .adm-field--full { grid-column: 1 / -1; }
-.hours-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.4rem; }
-@media (max-width: 800px) { .hours-grid { grid-template-columns: repeat(2, 1fr); } .meta-grid { grid-template-columns: 1fr; } }
+@media (max-width: 800px) { .meta-grid { grid-template-columns: 1fr; } }
+
+/* Pickup hours — one row per day, each with tap-to-pick clock ranges. */
+.hours-editor { display: flex; flex-direction: column; gap: 0.5rem; }
+.hours-day {
+  display: grid; grid-template-columns: 3.5rem 1fr; gap: 0.75rem; align-items: start;
+  padding: 0.6rem 0.7rem;
+  background: var(--adm-surface-2);
+  border: 1px solid var(--adm-border-soft);
+  border-radius: var(--adm-radius);
+}
+.hours-day__label {
+  font-weight: 700; font-size: 0.82rem; color: var(--adm-text);
+  padding-top: 0.55rem;
+}
+.hours-day__ranges { display: flex; flex-direction: column; gap: 0.45rem; min-width: 0; }
+.hours-range { display: flex; align-items: center; gap: 0.4rem; }
+.hours-range :deep(.tp) { width: 8.5rem; }
+.hours-range__dash { color: var(--adm-text-muted); }
+.hours-range__rm {
+  display: grid; place-items: center;
+  width: 1.9rem; height: 1.9rem; flex-shrink: 0;
+  background: transparent; border: 1px solid transparent;
+  color: var(--adm-text-muted); border-radius: var(--adm-radius-sm);
+  font-size: 1.1rem; line-height: 1; cursor: pointer;
+}
+.hours-range__rm:hover { color: var(--adm-danger); border-color: color-mix(in srgb, var(--adm-danger) 40%, var(--adm-border)); }
+.hours-day__closed { color: var(--adm-text-subtle); font-size: 0.82rem; font-style: italic; }
+.hours-day__actions { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.hours-day__add, .hours-day__copy {
+  background: none; border: none; cursor: pointer; padding: 0.15rem 0;
+  font: inherit; font-size: 0.78rem;
+}
+.hours-day__add { color: var(--adm-accent); font-weight: 600; }
+.hours-day__copy { color: var(--adm-text-subtle); }
+.hours-day__copy:hover { color: var(--adm-text-muted); }
+@media (max-width: 560px) {
+  .hours-range { flex-wrap: wrap; }
+  .hours-range :deep(.tp) { width: 7rem; }
+}
 
 .save-bar { display: flex; align-items: center; gap: 0.75rem; margin: 1rem 0 1.25rem; }
 
