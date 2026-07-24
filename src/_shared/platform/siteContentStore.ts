@@ -34,6 +34,12 @@ export function applyDeep(target: Record<string, unknown>, source: unknown): voi
     const cur = target[k]
     if (v && typeof v === 'object' && !Array.isArray(v) && cur && typeof cur === 'object' && !Array.isArray(cur)) {
       applyDeep(cur as Record<string, unknown>, v)
+    } else if (v && typeof v === 'object' && !Array.isArray(v) && Array.isArray(cur)) {
+      // Shape mismatch: the overlay has a plain object where the template
+      // expects an array (seen with legacy admin payloads, e.g. rooms as
+      // `{intro, items}`). Clobbering the array crashes template code that
+      // maps over it — keep the build-time array and skip the bad branch.
+      console.warn(`[content] ignoring overlay for "${k}": expected array, got object`)
     } else {
       target[k] = v
     }
@@ -42,6 +48,11 @@ export function applyDeep(target: Record<string, unknown>, source: unknown): voi
 
 export const useSiteContentStore = defineStore('siteContent', () => {
   const config = ref<unknown>(null)
+  // The reactive build-time siteConfig object every section actually reads.
+  // Unlike `config` (which hydrate() replaces with a merged snapshot), this
+  // reference is captured once and never swapped — so the live content editor
+  // can mutate it in place and have the page update instantly.
+  const liveConfig = ref<unknown>(null)
   const hydrated = ref(false)
   const hydrating = ref(false)
   const error = ref<string | null>(null)
@@ -80,6 +91,8 @@ export const useSiteContentStore = defineStore('siteContent', () => {
   // Templates seed the initial value with their build-time siteConfig.
   function setBuildTimeConfig(cfg: unknown) {
     if (config.value === null) config.value = cfg
+    // Capture the reactive object once; hydrate() never replaces this one.
+    if (liveConfig.value === null) liveConfig.value = cfg
   }
 
   async function loadGoogleReviews() {
@@ -210,7 +223,7 @@ export const useSiteContentStore = defineStore('siteContent', () => {
   }
 
   return {
-    config, hydrated, hydrating, error, isPlatform,
+    config, liveConfig, hydrated, hydrating, error, isPlatform,
     reviewsSource, googleReviews,
     instagramMedia, loadInstagram,
     ownedSiteId,
