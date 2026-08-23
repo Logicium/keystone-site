@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { Phone, AlertTriangle, MapPin } from 'lucide-vue-next'
 
-defineProps<{
+withDefaults(defineProps<{
   phone: string
   emergency?: boolean
   emergencyPhone?: string
   serviceArea?: string
-}>()
+  /** Bar label. Owner-editable. */
+  label?: string
+  /** Emergency badge text, e.g. "{{ emergencyLabel }}". Owner-editable. */
+  emergencyLabel?: string
+}>(), { label: 'Dispatch', emergencyLabel: '{{ emergencyLabel }}' })
 </script>
 
 <!--
@@ -19,7 +23,7 @@ defineProps<{
     <div class="ap-container ks-dispatch__row">
       <a class="ks-dispatch__primary" :href="'tel:' + phone.replace(/[^0-9+]/g, '')">
         <Phone :size="20" :stroke-width="2" />
-        <span class="ks-dispatch__label">Dispatch</span>
+        <span class="ks-dispatch__label">{{ label }}</span>
         <strong>{{ phone }}</strong>
       </a>
       <a
@@ -28,7 +32,7 @@ defineProps<{
         :href="'tel:' + (emergencyPhone || phone).replace(/[^0-9+]/g, '')"
       >
         <AlertTriangle :size="18" :stroke-width="2" />
-        <span class="ks-dispatch__label">24/7 emergency</span>
+        <span class="ks-dispatch__label">{{ emergencyLabel }}</span>
         <strong>{{ emergencyPhone || phone }}</strong>
       </a>
       <div v-if="serviceArea" class="ks-dispatch__area">

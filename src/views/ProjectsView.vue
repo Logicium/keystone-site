@@ -8,9 +8,9 @@ import GallerySection from '@apotome/archetype-shared/components/sections/Galler
 <template>
   <HeroSection
     subpage
-    eyebrow="Recent work"
-    title="The yard, the shop, the road."
-    subtitle="A sample of jobs delivered out of the Trinidad bay. References available in your trade — just ask."
+    :eyebrow="siteConfig.sections.projectsPage.eyebrow"
+    :title="siteConfig.sections.projectsPage.title"
+    :subtitle="siteConfig.sections.projectsPage.subtitle"
     :image="siteConfig.photos.about.src"
   />
 
@@ -20,8 +20,8 @@ import GallerySection from '@apotome/archetype-shared/components/sections/Galler
   />
 
   <GallerySection
-    eyebrow="From the floor"
-    title="Daily work"
+    :eyebrow="siteConfig.sections.projectsPage.galleryEyebrow"
+    :title="siteConfig.sections.projectsPage.galleryTitle"
     :photos="siteConfig.photos.gallery"
   />
 </template>

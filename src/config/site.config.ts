@@ -90,6 +90,24 @@ export interface KeystoneSiteConfig {
   }
   testimonials: Array<{ quote: string; author: string; source?: string }>
   social: Array<{ label: string; href: string }>
+  /** Editable section headers (eyebrows / titles / notes / CTA labels) so
+   *  owners control every heading on the site, not just body copy. */
+  sections: {
+    nav: { home: string; services: string; work: string; contact: string; ctaLabel: string }
+    hero: { title: string; ctaPrimary: string; ctaSecondary: string }
+    dispatch: { label: string; emergencyLabel: string }
+    services: { eyebrow: string; title: string }
+    capabilities: { eyebrow: string; title: string }
+    story: { eyebrow: string }
+    projects: { eyebrow: string; title: string }
+    hours: { eyebrow: string; title: string; note: string }
+    reviews: { eyebrow: string; title: string }
+    servicesPage: { eyebrow: string; title: string; subtitle: string; capabilitiesEyebrow: string; capabilitiesTitle: string }
+    projectsPage: { eyebrow: string; title: string; subtitle: string; galleryEyebrow: string; galleryTitle: string }
+    contactPage: { eyebrow: string; title: string; subtitle: string; hoursEyebrow: string; hoursNote: string }
+    booking: { eyebrow: string; title: string; intro: string }
+    contact: { title: string; intro: string }
+  }
 }
 
 /**
@@ -236,4 +254,49 @@ export const siteConfig: KeystoneSiteConfig = reactive(({
     { label: 'Facebook', href: 'https://facebook.com' },
     { label: 'Google',   href: 'https://google.com' },
   ],
+  sections: {
+    nav: { home: 'Home', services: 'Services', work: 'Work', contact: 'Contact', ctaLabel: 'Get a quote' },
+    hero: { title: 'Tools down. Job done.', ctaPrimary: 'See services', ctaSecondary: 'Get a quote' },
+    dispatch: { label: 'Dispatch', emergencyLabel: '24/7 emergency' },
+    services: { eyebrow: 'What we do', title: 'Services & rates' },
+    capabilities: { eyebrow: 'On paper', title: 'Capabilities' },
+    story: { eyebrow: 'The shop' },
+    projects: { eyebrow: 'Recent work', title: 'From the yard' },
+    hours: {
+      eyebrow: 'When we\u2019re open',
+      title: 'Shop hours',
+      note: 'After-hours dispatch available for fleet contracts.',
+    },
+    reviews: { eyebrow: 'Word from the lot', title: 'What customers say' },
+    servicesPage: {
+      eyebrow: 'Services & rates',
+      title: 'What we\u2019ll quote, and what we won\u2019t',
+      subtitle: 'Three trades under one roof. Flat-rate where we can, time-and-materials where we have to \u2014 always in writing before the wrench turns.',
+      capabilitiesEyebrow: 'Spec sheet',
+      capabilitiesTitle: 'Equipped for the job',
+    },
+    projectsPage: {
+      eyebrow: 'Recent work',
+      title: 'The yard, the shop, the road.',
+      subtitle: 'A sample of jobs delivered out of the Trinidad bay. References available in your trade \u2014 just ask.',
+      galleryEyebrow: 'From the floor',
+      galleryTitle: 'Daily work',
+    },
+    contactPage: {
+      eyebrow: 'Contact & dispatch',
+      title: 'Call the shop. Or send a quote request.',
+      subtitle: 'Walk-ins welcome during shop hours. Fleet, mobile field service, and emergency dispatch by phone.',
+      hoursEyebrow: 'Shop hours',
+      hoursNote: 'After-hours emergency dispatch for fleet contracts.',
+    },
+    booking: {
+      eyebrow: 'Book a service',
+      title: 'Schedule an appointment online',
+      intro: 'Pick a service and a time that works for you \u2014 we\u2019ll send a confirmation right away.',
+    },
+    contact: {
+      title: 'Request a quote',
+      intro: 'Tell us what you\u2019ve got. We\u2019ll come back with a written estimate and a realistic start date.',
+    },
+  },
 }))

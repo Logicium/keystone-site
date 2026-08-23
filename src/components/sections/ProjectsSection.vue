@@ -10,12 +10,12 @@ interface ProjectEntry {
   meta?: string[]
 }
 
-defineProps<{
+withDefaults(defineProps<{
   eyebrow?: string
   title?: string
   intro?: string
   items: ProjectEntry[]
-}>()
+}>(), { title: 'Recent work' })
 </script>
 
 <!--
@@ -29,7 +29,7 @@ defineProps<{
     <div class="ap-container">
       <div class="ap-section-head">
         <span v-if="eyebrow" class="ap-eyebrow">{{ eyebrow }}</span>
-        <h2>{{ title || 'Recent work' }}</h2>
+        <h2>{{ title }}</h2>
         <p v-if="intro" style="color: var(--ap-ink-muted); max-width: 60ch;">{{ intro }}</p>
       </div>
 

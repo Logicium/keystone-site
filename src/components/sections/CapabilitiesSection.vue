@@ -1,12 +1,12 @@
 <script setup lang="ts">
 interface Capability { value: string; label: string; detail?: string }
 
-defineProps<{
+withDefaults(defineProps<{
   eyebrow?: string
   title?: string
   intro?: string
   items: Capability[]
-}>()
+}>(), { title: 'Capabilities' })
 </script>
 
 <!--
@@ -20,7 +20,7 @@ defineProps<{
     <div class="ap-container">
       <div class="ap-section-head">
         <span v-if="eyebrow" class="ap-eyebrow">{{ eyebrow }}</span>
-        <h2>{{ title || 'Capabilities' }}</h2>
+        <h2>{{ title }}</h2>
         <p v-if="intro" style="color: var(--ap-ink-muted); max-width: 60ch;">{{ intro }}</p>
       </div>
 

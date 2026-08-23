@@ -2,13 +2,13 @@
 interface ServiceItem { name: string; description?: string; price: string; tags?: string[] }
 interface ServiceCategory { name: string; description?: string; items: ServiceItem[] }
 
-defineProps<{
+withDefaults(defineProps<{
   eyebrow?: string
   title?: string
   intro?: string
   categories: ServiceCategory[]
   quoteCta?: { label: string; to: string }
-}>()
+}>(), { title: 'Services & rates' })
 </script>
 
 <!--
@@ -23,7 +23,7 @@ defineProps<{
     <div class="ap-container">
       <div class="ap-section-head">
         <span v-if="eyebrow" class="ap-eyebrow">{{ eyebrow }}</span>
-        <h2>{{ title || 'Services & rates' }}</h2>
+        <h2>{{ title }}</h2>
         <p v-if="intro" style="color: var(--ap-ink-muted); max-width: 60ch;">{{ intro }}</p>
       </div>
 
